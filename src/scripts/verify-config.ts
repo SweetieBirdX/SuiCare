@@ -126,14 +126,19 @@ console.log('─'.repeat(60));
 
 const sealChecks = [
   {
-    name: 'Key Servers',
-    value: currentConfig.seal.keyServers.length > 0 ? currentConfig.seal.keyServers.join(', ') : '(empty)',
-    isValid: currentConfig.seal.keyServers.length > 0,
+    name: 'API Key',
+    value: currentConfig.seal.apiKey !== 'YOUR_SEAL_API_KEY_HERE' ? 'Configured' : 'Not configured',
+    isValid: currentConfig.seal.apiKey !== 'YOUR_SEAL_API_KEY_HERE',
   },
   {
-    name: 'Encryption Algorithm',
-    value: currentConfig.seal.encryptionAlgorithm,
-    isValid: true,
+    name: 'Base URL',
+    value: currentConfig.seal.baseUrl,
+    isValid: currentConfig.seal.baseUrl.startsWith('https://'),
+  },
+  {
+    name: 'Encryption Policy',
+    value: currentConfig.seal.encryptionPolicy,
+    isValid: currentConfig.seal.encryptionPolicy === 'identity-based',
   },
 ];
 
@@ -153,24 +158,19 @@ console.log('─'.repeat(60));
 
 const walrusChecks = [
   {
-    name: 'System Object ID',
-    value: currentConfig.walrus.systemObjectId,
-    isValid: currentConfig.walrus.systemObjectId.startsWith('0x') && currentConfig.walrus.systemObjectId.length === 66,
-  },
-  {
-    name: 'Staking Object ID',
-    value: currentConfig.walrus.stakingObjectId,
-    isValid: currentConfig.walrus.stakingObjectId.startsWith('0x') && currentConfig.walrus.stakingObjectId.length === 66,
-  },
-  {
     name: 'Publisher URL',
     value: currentConfig.walrus.publisherUrl,
     isValid: currentConfig.walrus.publisherUrl.startsWith('https://'),
   },
   {
-    name: 'Aggregator URL',
-    value: currentConfig.walrus.aggregatorUrl,
-    isValid: currentConfig.walrus.aggregatorUrl.startsWith('https://'),
+    name: 'API Key',
+    value: currentConfig.walrus.apiKey !== 'YOUR_WALRUS_API_KEY_HERE' ? 'Configured' : 'Not configured',
+    isValid: currentConfig.walrus.apiKey !== 'YOUR_WALRUS_API_KEY_HERE',
+  },
+  {
+    name: 'Max File Size',
+    value: `${(currentConfig.walrus.maxFileSize / (1024 * 1024)).toFixed(1)} MB`,
+    isValid: currentConfig.walrus.maxFileSize > 0,
   },
 ];
 
@@ -222,9 +222,9 @@ if (warningChecks > 0 || errorChecks > 0) {
     console.log('     Update .env.testnet: ENOKI_API_KEY=<your_key>');
   }
   
-  if (currentConfig.seal.keyServers.length === 0) {
-    console.log('  2. Request Seal key server access: https://docs.mystenlabs.com/seal');
-    console.log('     Update .env.testnet: VITE_SEAL_KEY_SERVER_URLS=["url1","url2"]');
+  if (currentConfig.seal.apiKey === 'YOUR_SEAL_API_KEY_HERE') {
+    console.log('  2. Get Seal API Key from: https://docs.mystenlabs.com/seal');
+    console.log('     Update .env.testnet: VITE_SEAL_API_KEY=<your_key>');
   }
   
   if (errorChecks > 0) {

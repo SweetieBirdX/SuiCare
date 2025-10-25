@@ -10,6 +10,7 @@ export interface SuiCareConfig {
   sui: {
     rpcUrl: string;
     network: 'mainnet' | 'testnet' | 'devnet' | 'local';
+    movePackageId: string;
   };
   
   // Move Contract IDs (from deployment)
@@ -28,20 +29,16 @@ export interface SuiCareConfig {
   
   // Seal configuration for identity-based encryption
   seal: {
-    keyDerivation: 'pbkdf2' | 'scrypt' | 'argon2';
-    encryptionAlgorithm: 'aes-256-gcm' | 'chacha20-poly1305';
-    keyServers: string[]; // Seal key server URLs
+    apiKey: string;
+    baseUrl: string;
+    encryptionPolicy: string;
   };
   
   // Walrus configuration for encrypted data storage
   walrus: {
-    systemObjectId: string;
-    stakingObjectId: string;
     publisherUrl: string;
-    aggregatorUrl: string;
-    storageProvider: 'sui' | 'ipfs' | 'arweave';
-    compressionEnabled: boolean;
-    maxFileSize: number; // in bytes
+    apiKey: string;
+    maxFileSize: number;
   };
 }
 
@@ -71,6 +68,7 @@ export const defaultConfig: SuiCareConfig = {
   sui: {
     rpcUrl: getEnvVar('VITE_SUI_FULLNODE_URL', 'https://fullnode.testnet.sui.io:443'),
     network: (getEnvVar('VITE_SUI_NETWORK_TYPE', 'testnet') as 'mainnet' | 'testnet' | 'devnet' | 'local'),
+    movePackageId: getEnvVar('VITE_MOVE_PACKAGE_ID', '0x2'),
   },
   contract: {
     packageId: getEnvVar('VITE_MOVE_PACKAGE_ID', '0x86ebb7b748ab29230aecde35a6cbd4ffcfe1a6e8e156ef8300ea1097e271b654'),
@@ -83,19 +81,13 @@ export const defaultConfig: SuiCareConfig = {
     provider: 'google',
   },
   seal: {
-    keyDerivation: 'scrypt',
-    encryptionAlgorithm: 'aes-256-gcm',
-    keyServers: parseSealKeyServers(
-      getEnvVar('VITE_SEAL_KEY_SERVER_URLS', '[]')
-    ),
+    apiKey: getEnvVar('VITE_SEAL_API_KEY', 'YOUR_SEAL_API_KEY_HERE'),
+    baseUrl: getEnvVar('VITE_SEAL_BASE_URL', 'https://api.seal.io'),
+    encryptionPolicy: getEnvVar('VITE_SEAL_ENCRYPTION_POLICY', 'identity-based'),
   },
   walrus: {
-    systemObjectId: getEnvVar('VITE_WALRUS_SYSTEM_OBJECT_ID', '0x6c2547cbbc38025cf3adac45f63cb0a8d12ecf777cdc75a4971612bf97fdf6af'),
-    stakingObjectId: getEnvVar('VITE_WALRUS_STAKING_OBJECT_ID', '0xbe46180321c30aab2f8b3501e24048377287fa708018a5b7c2792b35fe339ee3'),
     publisherUrl: getEnvVar('VITE_WALRUS_PUBLISHER_URL', 'https://publisher.walrus-testnet.walrus.space'),
-    aggregatorUrl: getEnvVar('VITE_WALRUS_AGGREGATOR_URL', 'https://aggregator.walrus-testnet.walrus.space'),
-    storageProvider: 'sui',
-    compressionEnabled: true,
+    apiKey: getEnvVar('VITE_WALRUS_API_KEY', 'YOUR_WALRUS_API_KEY_HERE'),
     maxFileSize: 10 * 1024 * 1024, // 10MB
   },
 };

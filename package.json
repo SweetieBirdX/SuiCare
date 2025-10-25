@@ -14,7 +14,9 @@
     "integration-demo": "npm run build && node dist/integration-demo.js",
     "example": "npm run build && node dist/example.js",
     "move:build": "cd health_record_project && sui move build",
-    "move:test": "cd health_record_project && sui move test"
+    "move:test": "cd health_record_project && sui move test",
+    "deploy:testnet": "npm run build && node dist/scripts/deploy-testnet.js",
+    "setup:wallet": "bash scripts/setup-wallet.sh"
   },
   "keywords": [
     "healthcare",
@@ -39,6 +41,8 @@
     "@types/node": "^24.9.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "dotenv": "^16.6.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
 }

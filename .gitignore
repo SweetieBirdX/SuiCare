@@ -8,12 +8,17 @@ yarn-error.log*
 dist/
 build/
 
-# Environment variables
+# Environment variables (NEVER commit these!)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env.testnet
+.env.mainnet
+
+# Keep example files
+!.env.example
 
 # IDE
 .vscode/
@@ -91,9 +96,13 @@ jspm_packages/
 # DynamoDB Local files
 .dynamodb/
 
-#.md files
+#.md files (auto-generated documentation)
 PRODUCTION_INTEGRATION_GUIDE.md
 PROJECT_SUMMARY.md
 SEAL_WALRUS_INTEGRATION_COMPLETE.md
 UI_IMPLEMENTATION_COMPLETE.md
 COMPLETE_INTEGRATION_SUMMARY.md
+TESTNET_DEPLOYMENT_GUIDE.md
+TESTNET_DEPLOYMENT_CHECKLIST.md
+QUICK_START.md
+TESTNET_DEPLOYMENT_COMPLETE.md

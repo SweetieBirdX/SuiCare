@@ -14,6 +14,7 @@ import { useEnokiAuth } from './useEnokiAuth';
 import { useRoleDetection } from './useRoleDetection';
 import { useAuditLog } from './useAuditLog';
 import { AccessControlDashboard } from './AccessControlUI';
+import { AuditTrailDashboard } from './AuditTrailUI';
 
 // ==========================================
 // PROMPT 4.1: zkLogin Authentication
@@ -213,37 +214,13 @@ export function PatientPortal({ suiAddress, suiClient, packageId }: any) {
                 />
             </section>
 
-            {/* PROMPT 4.4: Audit Log Display */}
-            <section className="audit-log">
-                <h2>📊 Access History (Audit Log)</h2>
-                <div className="audit-entries">
-                    {auditLog.map((entry, idx) => (
-                        <div key={idx} className={`audit-entry ${entry.was_emergency ? 'emergency' : ''}`}>
-                            <span className="timestamp">
-                                {new Date(entry.accessed_at).toLocaleString()}
-                            </span>
-                            <span className="accessor">{entry.accessor}</span>
-                            <span className="action">{entry.access_type}</span>
-                            {entry.was_emergency && (
-                                <span className="emergency-badge">⚠️ EMERGENCY</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-
-                {/* Emergency Access Alerts */}
-                {emergencyAccesses.length > 0 && (
-                    <div className="emergency-alerts">
-                        <h3>⚠️ Emergency Access Notifications</h3>
-                        {emergencyAccesses.map((access, idx) => (
-                            <div key={idx} className="emergency-alert">
-                                <p>Doctor: {access.doctor}</p>
-                                <p>Time: {new Date(access.timestamp).toLocaleString()}</p>
-                                <p>Reason: Medical Emergency</p>
-                            </div>
-                        ))}
-                    </div>
-                )}
+            {/* PROMPT 4.4: Comprehensive Audit Trail */}
+            <section className="audit-trail">
+                <AuditTrailDashboard
+                    suiAddress={suiAddress}
+                    suiClient={suiClient}
+                    packageId={packageId}
+                />
             </section>
         </div>
     );

@@ -1,0 +1,35 @@
+{
+  "name": "suicare",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "description": "Healthcare Data Management System on Sui Blockchain",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node dist/index.js",
+    "move:build": "cd health_record_project && sui move build",
+    "move:test": "cd health_record_project && sui move test"
+  },
+  "keywords": [
+    "healthcare",
+    "blockchain",
+    "sui",
+    "encryption",
+    "privacy",
+    "identity"
+  ],
+  "author": "SuiCare Team",
+  "license": "MIT",
+  "dependencies": {
+    "@mysten/enoki": "^0.12.8",
+    "@mysten/seal": "^0.9.1",
+    "@mysten/sui": "^1.43.1",
+    "@mysten/walrus": "^0.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "typescript": "^5.9.3"
+  }
+}

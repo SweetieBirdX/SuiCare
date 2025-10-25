@@ -1,4 +1,4 @@
-import { SuiClient } from '@mysten/sui/client';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
 import { EnokiClient } from '@mysten/enoki';
 import { SealClient } from '@mysten/seal';
 import { WalrusClient } from '@mysten/walrus';
@@ -20,8 +20,6 @@ class SuiCare {
   constructor(config: {
     suiRpcUrl: string;
     enokiApiKey: string;
-    sealConfig?: any;
-    walrusConfig?: any;
   }) {
     // Initialize Sui client for blockchain interaction
     this.suiClient = new SuiClient({ url: config.suiRpcUrl });
@@ -30,10 +28,19 @@ class SuiCare {
     this.enokiClient = new EnokiClient({ apiKey: config.enokiApiKey });
     
     // Initialize Seal client for identity-based encryption
-    this.sealClient = new SealClient(config.sealConfig || {});
+    // SealClient requires serverConfigs parameter with key server configurations
+    this.sealClient = new SealClient({
+      suiClient: this.suiClient,
+      serverConfigs: [], // Empty array for development - add actual key server configs in production
+      verifyKeyServers: false, // Disable verification for development
+    });
     
     // Initialize Walrus client for encrypted data storage
-    this.walrusClient = new WalrusClient(config.walrusConfig || {});
+    // WalrusClient requires network parameter
+    this.walrusClient = new WalrusClient({
+      network: 'testnet', // Use testnet for development
+      suiClient: this.suiClient,
+    });
   }
 
   /**

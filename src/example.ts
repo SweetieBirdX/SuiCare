@@ -17,8 +17,6 @@ async function example() {
     const suicare = new SuiCare({
       suiRpcUrl: config.sui.rpcUrl,
       enokiApiKey: config.enoki.apiKey,
-      sealConfig: config.seal,
-      walrusConfig: config.walrus,
     });
 
     // Initialize the system

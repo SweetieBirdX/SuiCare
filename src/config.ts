@@ -22,6 +22,7 @@ export interface SuiCareConfig {
   seal: {
     keyDerivation: 'pbkdf2' | 'scrypt' | 'argon2';
     encryptionAlgorithm: 'aes-256-gcm' | 'chacha20-poly1305';
+    keyServers: string[]; // Seal key server URLs
   };
   
   // Walrus configuration for encrypted data storage
@@ -45,6 +46,7 @@ export const defaultConfig: SuiCareConfig = {
   seal: {
     keyDerivation: 'scrypt',
     encryptionAlgorithm: 'aes-256-gcm',
+    keyServers: [], // Empty array for development - add actual Seal key server URLs in production
   },
   walrus: {
     storageProvider: 'sui',

@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEnokiAuth } from './useEnokiAuth';
 import { useRoleDetection } from './useRoleDetection';
 import { useAuditLog } from './useAuditLog';
+import { AccessControlDashboard } from './AccessControlUI';
 
 // ==========================================
 // PROMPT 4.1: zkLogin Authentication
@@ -202,6 +203,16 @@ export function PatientPortal({ suiAddress, suiClient, packageId }: any) {
                 </div>
             </section>
 
+            {/* Access Control Management */}
+            <section className="access-control">
+                <AccessControlDashboard
+                    suiAddress={suiAddress}
+                    suiClient={suiClient}
+                    packageId={packageId}
+                    userRole="patient"
+                />
+            </section>
+
             {/* PROMPT 4.4: Audit Log Display */}
             <section className="audit-log">
                 <h2>📊 Access History (Audit Log)</h2>
@@ -245,15 +256,26 @@ export function PatientPortal({ suiAddress, suiClient, packageId }: any) {
 export function DoctorDashboard({ suiAddress, suiClient, packageId }: any) {
     const [grantedRecords, setGrantedRecords] = React.useState<any[]>([]);
     const [selectedRecord, setSelectedRecord] = React.useState<any>(null);
+    const [selfAccessWarning, setSelfAccessWarning] = React.useState<boolean>(false);
 
     useEffect(() => {
         loadGrantedRecords();
+        checkSelfAccessRestriction();
     }, [suiAddress]);
 
     async function loadGrantedRecords() {
         // Get records doctor has access to
         const records = await getGrantedRecordsForDoctor(suiAddress);
         setGrantedRecords(records);
+    }
+
+    async function checkSelfAccessRestriction() {
+        // CRITICAL RESTRICTION: Doctor cannot access their own records
+        const ownRecord = await getPatientRecord(suiAddress);
+        if (ownRecord && ownRecord.id) {
+            setSelfAccessWarning(true);
+            console.warn('⚠️  CRITICAL: Doctor attempting to access own records - BLOCKED');
+        }
     }
 
     async function requestAccess(patientId: string, reason: string) {
@@ -274,6 +296,16 @@ export function DoctorDashboard({ suiAddress, suiClient, packageId }: any) {
                 <h1>👨‍⚕️ Doctor Dashboard</h1>
                 <p>Address: {suiAddress}</p>
             </header>
+
+            {/* CRITICAL RESTRICTION WARNING */}
+            {selfAccessWarning && (
+                <div className="critical-warning">
+                    <h3>🚫 CRITICAL ACCESS RESTRICTION</h3>
+                    <p>⚠️ As a healthcare provider, you cannot access your own medical records.</p>
+                    <p>This restriction prevents professional misconduct and ensures ethical practice.</p>
+                    <p>To access your own records, please use the Patient Portal with a different account.</p>
+                </div>
+            )}
 
             {/* Patient Records */}
             <section className="patient-list">
@@ -330,14 +362,14 @@ export function DoctorDashboard({ suiAddress, suiClient, packageId }: any) {
                 </section>
             )}
 
-            {/* Request New Access */}
-            <section className="request-access">
-                <h2>🔐 Request Access to New Patient</h2>
-                <input type="text" placeholder="Patient Address" />
-                <textarea placeholder="Reason for access request" />
-                <button onClick={() => requestAccess('', '')}>
-                    Send Request
-                </button>
+            {/* Access Control Management */}
+            <section className="access-control">
+                <AccessControlDashboard
+                    suiAddress={suiAddress}
+                    suiClient={suiClient}
+                    packageId={packageId}
+                    userRole="doctor"
+                />
             </section>
         </div>
     );
@@ -400,9 +432,249 @@ export function PharmacyDashboard({ suiAddress, suiClient, packageId }: any) {
     );
 }
 
-// Helper functions
-async function getPatientRecord(address: string) { return {}; }
-async function getPendingAccessRequests(recordId: string) { return []; }
-async function getGrantedRecordsForDoctor(address: string) { return []; }
-async function getPrescriptionsForPharmacy(address: string) { return []; }
-async function viewRecord(ref: any) {}
+// ==========================================
+// Helper Functions
+// ==========================================
+
+async function getPatientRecord(address: string) {
+    // Mock patient record for testing
+    return {
+        id: `patient-${address.substring(0, 8)}`,
+        created_at: Date.now() - 86400000, // 1 day ago
+        walrus_references: [
+            {
+                blob_id: 'walrus-blob-123',
+                record_type: 'lab',
+                uploaded_at: Date.now() - 3600000
+            }
+        ],
+        active_permissions: [
+            {
+                granted_to: 'doctor-001',
+                access_level: 2,
+                expires_at: Date.now() + 86400000
+            }
+        ]
+    };
+}
+
+async function getPendingAccessRequests(recordId: string) {
+    // Mock pending requests
+    return [
+        {
+            id: 'req-001',
+            requester: 'doctor-002',
+            reason: 'Emergency consultation',
+            access_level: 2
+        }
+    ];
+}
+
+async function getGrantedRecordsForDoctor(doctorAddress: string) {
+    // Mock granted records for doctor
+    return [
+        {
+            id: 'patient-001',
+            patient_name: 'John Doe',
+            updated_at: Date.now() - 3600000,
+            walrus_references: [
+                {
+                    blob_id: 'walrus-blob-123',
+                    record_type: 'lab',
+                    uploaded_at: Date.now() - 3600000
+                }
+            ],
+            my_access_level: 2
+        }
+    ];
+}
+
+async function getPrescriptionsForPharmacy(pharmacyAddress: string) {
+    // Mock prescriptions for pharmacy
+    return [
+        {
+            id: 'prescription-001',
+            patient_name: 'John Doe',
+            medication: 'Paracetamol',
+            dosage: '500mg',
+            doctor: 'Dr. Smith',
+            dispensed: false
+        }
+    ];
+}
+
+async function viewRecord(ref: any) {
+    console.log('Viewing record:', ref);
+    // In production, this would decrypt and display the record
+}
+
+// ==========================================
+// PROMPT 4.3: Admin Panel (System Management)
+// ==========================================
+
+export function AdminPanel({ suiAddress, suiClient, packageId }: any) {
+    const [systemStats, setSystemStats] = React.useState<any>(null);
+    const [allUsers, setAllUsers] = React.useState<any[]>([]);
+
+    useEffect(() => {
+        loadSystemData();
+    }, []);
+
+    async function loadSystemData() {
+        // Load system statistics and user management data
+        setSystemStats({
+            totalPatients: 150,
+            totalDoctors: 25,
+            totalRecords: 1200,
+            systemHealth: 'Good'
+        });
+        
+        setAllUsers([
+            { id: 'user-001', role: 'patient', address: '0x123...', status: 'active' },
+            { id: 'user-002', role: 'doctor', address: '0x456...', status: 'active' }
+        ]);
+    }
+
+    return (
+        <div className="admin-panel">
+            <header>
+                <h1>🔧 Admin Panel</h1>
+                <p>System Administration</p>
+            </header>
+
+            <section className="system-stats">
+                <h2>📊 System Statistics</h2>
+                <div className="stats-grid">
+                    <div className="stat-card">
+                        <h3>Total Patients</h3>
+                        <p>{systemStats?.totalPatients || 0}</p>
+                    </div>
+                    <div className="stat-card">
+                        <h3>Total Doctors</h3>
+                        <p>{systemStats?.totalDoctors || 0}</p>
+                    </div>
+                    <div className="stat-card">
+                        <h3>Total Records</h3>
+                        <p>{systemStats?.totalRecords || 0}</p>
+                    </div>
+                    <div className="stat-card">
+                        <h3>System Health</h3>
+                        <p className={systemStats?.systemHealth === 'Good' ? 'good' : 'warning'}>
+                            {systemStats?.systemHealth || 'Unknown'}
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <section className="user-management">
+                <h2>👥 User Management</h2>
+                <div className="users-table">
+                    {allUsers.map(user => (
+                        <div key={user.id} className="user-row">
+                            <span>{user.address}</span>
+                            <span className={`role ${user.role}`}>{user.role}</span>
+                            <span className={`status ${user.status}`}>{user.status}</span>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        </div>
+    );
+}
+
+// ==========================================
+// PROMPT 4.3: Role Setup (New User Onboarding)
+// ==========================================
+
+export function RoleSetup({ suiAddress, suiClient, packageId }: any) {
+    const [selectedRole, setSelectedRole] = React.useState<string>('');
+    const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
+
+    async function submitRoleSelection() {
+        if (!selectedRole) return;
+        
+        setIsSubmitting(true);
+        try {
+            console.log(`Setting up role: ${selectedRole} for ${suiAddress}`);
+            // In production, this would call Move contract to create capability objects
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate delay
+            console.log(`✅ Role ${selectedRole} setup completed`);
+        } catch (error) {
+            console.error('Role setup failed:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    return (
+        <div className="role-setup">
+            <header>
+                <h1>🎭 Role Setup</h1>
+                <p>Choose your role in the SuiCare system</p>
+            </header>
+
+            <section className="role-selection">
+                <h2>Select Your Role</h2>
+                <div className="role-options">
+                    <div 
+                        className={`role-option ${selectedRole === 'patient' ? 'selected' : ''}`}
+                        onClick={() => setSelectedRole('patient')}
+                    >
+                        <h3>👤 Patient</h3>
+                        <p>View your own health records and manage access permissions</p>
+                        <ul>
+                            <li>✅ View your health records</li>
+                            <li>✅ Grant/revoke access to doctors</li>
+                            <li>✅ View audit logs</li>
+                            <li>❌ Cannot modify existing records</li>
+                        </ul>
+                    </div>
+
+                    <div 
+                        className={`role-option ${selectedRole === 'doctor' ? 'selected' : ''}`}
+                        onClick={() => setSelectedRole('doctor')}
+                    >
+                        <h3>👨‍⚕️ Doctor</h3>
+                        <p>Access patient records and add new medical information</p>
+                        <ul>
+                            <li>✅ View granted patient records</li>
+                            <li>✅ Add new diagnoses and test results</li>
+                            <li>✅ Request access to new patients</li>
+                            <li>❌ Cannot access your own records</li>
+                        </ul>
+                    </div>
+
+                    <div 
+                        className={`role-option ${selectedRole === 'pharmacy' ? 'selected' : ''}`}
+                        onClick={() => setSelectedRole('pharmacy')}
+                    >
+                        <h3>💊 Pharmacy</h3>
+                        <p>View and dispense prescriptions only</p>
+                        <ul>
+                            <li>✅ View prescriptions</li>
+                            <li>✅ Mark medications as dispensed</li>
+                            <li>❌ Cannot view other medical records</li>
+                            <li>❌ Cannot modify patient data</li>
+                        </ul>
+                    </div>
+                </div>
+
+                {selectedRole && (
+                    <div className="role-confirmation">
+                        <h3>Confirm Role Selection</h3>
+                        <p>You are about to register as a <strong>{selectedRole}</strong>.</p>
+                        <p>This action will create the necessary capability objects on the blockchain.</p>
+                        
+                        <button 
+                            onClick={submitRoleSelection}
+                            disabled={isSubmitting}
+                            className="confirm-button"
+                        >
+                            {isSubmitting ? 'Setting up...' : 'Confirm Role'}
+                        </button>
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+}

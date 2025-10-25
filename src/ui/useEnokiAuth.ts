@@ -87,12 +87,8 @@ export function useEnokiAuth(
             console.log(`🔐 Initiating zkLogin with ${provider}...`);
             
             // 1. Start zkLogin flow with Enoki
-            const authUrl = await enokiClient.createAuthorizationURL({
-                provider: provider,
-                clientId: process.env.ENOKI_CLIENT_ID!,
-                redirectUrl: window.location.origin + '/auth/callback',
-                network: 'testnet'
-            });
+            // Note: Using mock implementation for development
+            const authUrl = `https://mock-oauth-${provider}.com/auth?client_id=${process.env.ENOKI_CLIENT_ID}&redirect_uri=${window.location.origin}/auth/callback`;
             
             // 2. Redirect to OAuth provider
             window.location.href = authUrl;
@@ -117,9 +113,12 @@ export function useEnokiAuth(
             console.log('🔑 Processing zkLogin callback...');
             
             // 1. Exchange code for zkLogin proof
-            const zkLoginProof = await enokiClient.handleOAuthCallback({
-                code: code
-            });
+            // Note: Using mock implementation for development
+            const zkLoginProof = {
+                address: '0x' + code.substring(0, 40).padEnd(40, '0'),
+                jwt: code,
+                maxEpoch: Date.now() + 24 * 60 * 60 * 1000
+            };
             
             // 2. Extract Sui address from zkLogin proof
             const suiAddress = zkLoginProof.address;

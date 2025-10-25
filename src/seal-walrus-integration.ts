@@ -366,7 +366,7 @@ export class SealWalrusIntegration {
         try {
             // Try browser crypto API
             if (typeof globalThis.crypto !== 'undefined' && globalThis.crypto.subtle) {
-                const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+                const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', new Uint8Array(data));
                 return new Uint8Array(hashBuffer);
             }
         } catch (e) {

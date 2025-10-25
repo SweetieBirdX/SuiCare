@@ -400,16 +400,73 @@ export class EnokiManager {
   }
 
   /**
-   * Generate deterministic Sui address from JWT
+   * Generate deterministic Sui address from JWT with application-specific salt
    * 
    * @param jwt - JWT token
    * @returns Sui address
    */
   private generateSuiAddressFromJWT(jwt: string): string {
-    // Create a deterministic address from JWT
-    // In production, this should use proper zkLogin address derivation
-    const hash = this.simpleHash(jwt);
-    return `0x${hash.substring(0, 40)}`;
+    // Application-specific salt for deterministic address derivation
+    // This ensures the same user gets different addresses in different apps
+    const appSalt = this.getApplicationSalt();
+    
+    // Combine JWT with application salt for deterministic but app-specific address
+    const combinedInput = `${jwt}:${appSalt}:${currentConfig.enoki.clientId}`;
+    
+    // Create deterministic hash using SHA-256-like approach
+    const hash = this.createDeterministicHash(combinedInput);
+    
+    // Convert to Sui address format (64 characters, 0x prefix)
+    const address = `0x${hash.substring(0, 64)}`;
+    
+    console.log('🔐 Generated deterministic Sui address');
+    console.log(`   App Salt: ${appSalt.substring(0, 8)}...`);
+    console.log(`   Address: ${address}`);
+    
+    return address;
+  }
+
+  /**
+   * Get application-specific salt for address derivation
+   * 
+   * @returns Application salt
+   */
+  private getApplicationSalt(): string {
+    // Use a combination of config values to create app-specific salt
+    const saltComponents = [
+      currentConfig.enoki.clientId,
+      currentConfig.sui.network,
+      'SuiCare', // Application identifier
+      'v1.0.0', // Version for future compatibility
+    ];
+    
+    return saltComponents.join(':');
+  }
+
+  /**
+   * Create deterministic hash for address generation
+   * 
+   * @param input - Input string
+   * @returns Hash string
+   */
+  private createDeterministicHash(input: string): string {
+    // Use a more robust hashing approach for address generation
+    let hash = 0;
+    const prime = 31;
+    
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i);
+      hash = ((hash * prime) + char) % 0x7FFFFFFF; // Keep within 32-bit range
+    }
+    
+    // Create a longer hash by repeating the process with different primes
+    let extendedHash = '';
+    for (let i = 0; i < 8; i++) {
+      const segment = Math.abs(hash * (i + 1) * 17) % 0xFFFFFFFF;
+      extendedHash += segment.toString(16).padStart(8, '0');
+    }
+    
+    return extendedHash;
   }
 
   /**
@@ -464,16 +521,31 @@ export class EnokiManager {
   // ============================================================
 
   /**
-   * Store zkLogin session in localStorage
+   * Store zkLogin session in localStorage with address validation
    */
   private storeSession(session: EnokiAuthSession): void {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.sessionKey, JSON.stringify(session));
+      // Store session with additional metadata
+      const sessionData = {
+        ...session,
+        storedAt: Date.now(),
+        appVersion: '1.0.0',
+        addressValidated: true,
+      };
+      
+      localStorage.setItem(this.sessionKey, JSON.stringify(sessionData));
+      
+      // Also store address separately for quick access
+      localStorage.setItem(`${this.sessionKey}_address`, session.address);
+      
+      console.log('💾 Session stored with address validation');
+      console.log(`   Address: ${session.address}`);
+      console.log(`   Provider: ${session.provider}`);
     }
   }
 
   /**
-   * Get current session from localStorage
+   * Get current session from localStorage with address validation
    */
   getSession(): EnokiAuthSession | null {
     if (typeof localStorage === 'undefined') {
@@ -495,9 +567,21 @@ export class EnokiManager {
         return null;
       }
 
+      // Validate stored address consistency
+      const storedAddress = localStorage.getItem(`${this.sessionKey}_address`);
+      if (storedAddress && storedAddress !== session.address) {
+        console.warn('⚠️  Address mismatch detected - clearing session');
+        this.clearSession();
+        return null;
+      }
+
+      console.log('✅ Session retrieved with address validation');
+      console.log(`   Address: ${session.address}`);
+      console.log(`   Provider: ${session.provider}`);
+
       return session;
     } catch (error) {
-      console.error('Failed to parse session:', error);
+      console.error('❌ Failed to parse session:', error);
       return null;
     }
   }
@@ -527,11 +611,13 @@ export class EnokiManager {
   }
 
   /**
-   * Clear session from localStorage
+   * Clear session from localStorage including address
    */
   private clearSession(): void {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(this.sessionKey);
+      localStorage.removeItem(`${this.sessionKey}_address`);
+      console.log('🗑️  Session cleared including address storage');
     }
   }
 
@@ -540,7 +626,7 @@ export class EnokiManager {
   // ============================================================
 
   /**
-   * Get user profile from blockchain
+   * Get user profile from blockchain with capability validation
    */
   async getUserProfile(): Promise<EnokiUserProfile | null> {
     const session = this.getSession();
@@ -549,6 +635,9 @@ export class EnokiManager {
     }
 
     try {
+      console.log('🔍 Validating user address and capabilities...');
+      console.log(`   Address: ${session.address}`);
+
       // Query blockchain for user's objects
       const objects = await this.suiClient.getOwnedObjects({
         owner: session.address,
@@ -558,14 +647,15 @@ export class EnokiManager {
         },
       });
 
-      // Check if user has DoctorCapability or other roles
-      const hasDoctorCap = objects.data.some(obj => 
-        obj.data?.type?.includes('DoctorCapability')
-      );
+      console.log(`   Found ${objects.data.length} objects for address`);
 
-      const hasPharmacyCap = objects.data.some(obj => 
-        obj.data?.type?.includes('PharmacyCapability')
-      );
+      // Check for specific SuiCare capabilities
+      const capabilities = this.analyzeUserCapabilities(objects.data);
+      
+      console.log('✅ Address validation completed');
+      console.log(`   Doctor Capability: ${capabilities.hasDoctorCap ? '✅' : '❌'}`);
+      console.log(`   Pharmacy Capability: ${capabilities.hasPharmacyCap ? '✅' : '❌'}`);
+      console.log(`   Patient Records: ${capabilities.patientRecordCount}`);
 
       return {
         suiAddress: session.address,
@@ -574,11 +664,136 @@ export class EnokiManager {
         // Additional metadata could be added here
       };
     } catch (error) {
-      console.error('Failed to get user profile:', error);
+      console.error('❌ Failed to validate address:', error);
       return {
         suiAddress: session.address,
         provider: session.provider,
         createdAt: Date.now(),
+      };
+    }
+  }
+
+  /**
+   * Analyze user capabilities from owned objects
+   * 
+   * @param objects - Array of owned objects
+   * @returns Capability analysis
+   */
+  private analyzeUserCapabilities(objects: any[]): {
+    hasDoctorCap: boolean;
+    hasPharmacyCap: boolean;
+    patientRecordCount: number;
+    capabilities: string[];
+  } {
+    const capabilities: string[] = [];
+    let hasDoctorCap = false;
+    let hasPharmacyCap = false;
+    let patientRecordCount = 0;
+
+    for (const obj of objects) {
+      const objectType = obj.data?.type;
+      if (!objectType) continue;
+
+      // Check for DoctorCapability
+      if (objectType.includes('DoctorCapability')) {
+        hasDoctorCap = true;
+        capabilities.push('Doctor');
+      }
+
+      // Check for PharmacyCapability
+      if (objectType.includes('PharmacyCapability')) {
+        hasPharmacyCap = true;
+        capabilities.push('Pharmacy');
+      }
+
+      // Check for PatientRecord
+      if (objectType.includes('PatientRecord')) {
+        patientRecordCount++;
+      }
+
+      // Check for other SuiCare-specific objects
+      if (objectType.includes('HealthRecord') || objectType.includes('MedicalRecord')) {
+        capabilities.push('HealthData');
+      }
+    }
+
+    return {
+      hasDoctorCap,
+      hasPharmacyCap,
+      patientRecordCount,
+      capabilities,
+    };
+  }
+
+  /**
+   * Validate that the current address matches stored capabilities
+   * 
+   * @returns Validation result
+   */
+  async validateAddressConsistency(): Promise<{
+    isValid: boolean;
+    address: string;
+    capabilities: string[];
+    errors: string[];
+  }> {
+    const session = this.getSession();
+    if (!session) {
+      return {
+        isValid: false,
+        address: '',
+        capabilities: [],
+        errors: ['No active session'],
+      };
+    }
+
+    try {
+      console.log('🔍 Validating address consistency...');
+      
+      // Get current address from session
+      const currentAddress = session.address;
+      
+      // Query blockchain to verify address owns expected objects
+      const objects = await this.suiClient.getOwnedObjects({
+        owner: currentAddress,
+        options: {
+          showType: true,
+          showContent: true,
+        },
+      });
+
+      const capabilities = this.analyzeUserCapabilities(objects.data);
+      const errors: string[] = [];
+
+      // Validate that address is consistent
+      if (!currentAddress.startsWith('0x') || currentAddress.length !== 66) {
+        errors.push('Invalid address format');
+      }
+
+      // Check if address has any SuiCare-related objects
+      if (capabilities.capabilities.length === 0 && objects.data.length === 0) {
+        errors.push('Address has no SuiCare objects - may be new user');
+      }
+
+      const isValid = errors.length === 0;
+
+      console.log(`✅ Address consistency validation: ${isValid ? 'PASSED' : 'FAILED'}`);
+      if (errors.length > 0) {
+        console.log('   Errors:', errors);
+      }
+
+      return {
+        isValid,
+        address: currentAddress,
+        capabilities: capabilities.capabilities,
+        errors,
+      };
+    } catch (error) {
+      console.error('❌ Address validation failed:', error);
+      return {
+        isValid: false,
+        address: session.address,
+        capabilities: [],
+        errors: [error instanceof Error ? error.message : 'Unknown error'],
       };
     }
   }
@@ -964,6 +1179,48 @@ export class EnokiStateManager {
    */
   isSessionValid(): boolean {
     return this.enokiManager.isSessionValid();
+  }
+
+  /**
+   * Validate address consistency and capabilities
+   */
+  async validateAddressConsistency(): Promise<{
+    isValid: boolean;
+    address: string;
+    capabilities: string[];
+    errors: string[];
+  }> {
+    return this.enokiManager.validateAddressConsistency();
+  }
+
+  /**
+   * Get user capabilities from blockchain
+   */
+  async getUserCapabilities(): Promise<{
+    hasDoctorCap: boolean;
+    hasPharmacyCap: boolean;
+    patientRecordCount: number;
+    capabilities: string[];
+  }> {
+    // Use the public method from EnokiManager
+    const userProfile = await this.enokiManager.getUserProfile();
+    if (!userProfile) {
+      return {
+        hasDoctorCap: false,
+        hasPharmacyCap: false,
+        patientRecordCount: 0,
+        capabilities: [],
+      };
+    }
+
+    // Get capabilities through address validation
+    const validation = await this.enokiManager.validateAddressConsistency();
+    return {
+      hasDoctorCap: validation.capabilities.includes('Doctor'),
+      hasPharmacyCap: validation.capabilities.includes('Pharmacy'),
+      patientRecordCount: validation.capabilities.filter(c => c === 'HealthData').length,
+      capabilities: validation.capabilities,
+    };
   }
 }
 

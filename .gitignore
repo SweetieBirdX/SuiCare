@@ -90,3 +90,7 @@ jspm_packages/
 
 # DynamoDB Local files
 .dynamodb/
+
+
+PRODUCTION_INTEGRATION_GUIDE.md
+PROJECT_SUMMARY.md

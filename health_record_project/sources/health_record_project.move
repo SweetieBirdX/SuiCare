@@ -1,10 +1,14 @@
-/*
 /// Module: health_record_project
 /// SuiCare Health Record Management System
 /// 
-/// This module provides the core functionality for managing patient health records
-/// on the Sui blockchain with privacy-preserving features.
-module health_record_project::health_record_project {
+/// This module provides comprehensive healthcare data management with:
+/// - Role-Based Access Control (RBAC)
+/// - Seal encryption policy integration
+/// - Walrus storage references
+/// - Emergency access with MasterKey
+/// - Immutable audit trail
+/// - ZK-proof verification for healthcare providers
+module health_record_project::health_record {
     use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -12,71 +16,162 @@ module health_record_project::health_record_project {
     use std::string::{Self, String};
     use std::vector;
     use sui::table::{Self, Table};
+    use sui::clock::{Self, Clock};
 
-    // ===== Constants =====
+    // ===== Error Constants =====
     
     const E_NOT_AUTHORIZED: u64 = 0;
     const E_PATIENT_NOT_FOUND: u64 = 1;
     const E_RECORD_NOT_FOUND: u64 = 2;
     const E_INVALID_ACCESS: u64 = 3;
+    const E_NOT_DOCTOR: u64 = 4;
+    const E_NOT_PATIENT: u64 = 5;
+    const E_ALREADY_HAS_ACCESS: u64 = 6;
+    const E_INVALID_MASTER_KEY: u64 = 7;
+    const E_EMERGENCY_ONLY: u64 = 8;
+    const E_IMMUTABLE_RECORD: u64 = 9;
 
-    // ===== Structs =====
+    // ===== Role Structs =====
 
-    /// Represents a patient in the system
-    public struct Patient has store {
-        id: String,
+    /// Doctor capability with ZK-proof verification
+    public struct DoctorCapability has key, store {
+        id: UID,
+        doctor_address: address,
+        license_number: String,
+        specialization: String,
+        hospital: String,
+        verified: bool,
+        issued_at: u64,
+    }
+
+    /// Pharmacy capability
+    public struct PharmacyCapability has key, store {
+        id: UID,
+        pharmacy_address: address,
+        license_number: String,
         name: String,
-        date_of_birth: String,
-        encrypted_data_id: String, // Reference to encrypted data in Walrus
-        created_at: u64,
-        updated_at: u64,
+        verified: bool,
     }
 
-    /// Represents a health record entry
-    public struct HealthRecord has store {
-        id: String,
-        patient_id: String,
-        record_type: String, // e.g., "diagnosis", "medication", "lab_result"
-        encrypted_content: String, // Encrypted using Seal SDK
-        created_by: String, // Healthcare provider ID
-        created_at: u64,
-        updated_at: u64,
-    }
-
-    /// Main registry for managing patients and records
-    public struct HealthRecordRegistry has key {
+    /// Emergency access master key
+    public struct MasterKey has key, store {
         id: UID,
-        patients: Table<String, Patient>,
-        records: Table<String, HealthRecord>,
-        access_policies: Table<String, vector<String>>, // patient_id -> authorized_providers
+        authorized_address: address,
+        valid_until: u64,
+        emergency_only: bool,
     }
 
-    /// Capability for managing health records
-    public struct HealthRecordCap has key, store {
+    // ===== Data Structs =====
+
+    /// Patient health record with RBAC and Seal/Walrus integration
+    public struct PatientRecord has key, store {
         id: UID,
-        provider_id: String,
+        patient_address: address,
+        
+        // Walrus references to encrypted data (immutable history)
+        encrypted_walrus_references: vector<WalrusReference>,
+        
+        // Seal encryption policy ID (on-chain reference)
+        seal_policy_id: String,
+        
+        // RBAC: Active access permissions
+        active_permissions: Table<address, Permission>,
+        
+        // Pending access requests
+        pending_requests: vector<AccessRequest>,
+        
+        // Audit trail
+        access_history: vector<AccessLog>,
+        
+        created_at: u64,
+    }
+
+    /// Walrus storage reference with metadata
+    public struct WalrusReference has store, copy, drop {
+        walrus_blob_id: String,
+        record_type: String, // "diagnosis", "lab_result", "prescription", etc.
+        uploaded_by: address,
+        uploaded_at: u64,
+        data_hash: vector<u8>, // Hash of encrypted data for integrity
+    }
+
+    /// Access permission details
+    public struct Permission has store, copy, drop {
+        granted_by: address, // Patient who granted access
+        granted_to: address, // Healthcare provider
+        access_level: u8, // 1=read_only, 2=read_append, 3=emergency
+        granted_at: u64,
+        expires_at: u64,
+    }
+
+    /// Access request from healthcare provider
+    public struct AccessRequest has store, copy, drop {
+        requester: address,
+        reason: String,
+        requested_at: u64,
+        access_level: u8,
+    }
+
+    /// Audit log entry (immutable)
+    public struct AccessLog has store, copy, drop {
+        accessor: address,
+        access_type: String, // "read", "append", "emergency"
+        accessed_at: u64,
+        was_emergency: bool,
+    }
+
+    /// Global registry
+    public struct HealthRegistry has key {
+        id: UID,
+        patient_records: Table<address, UID>, // patient_address -> record_id
+        doctor_registry: Table<address, bool>,
+        pharmacy_registry: Table<address, bool>,
     }
 
     // ===== Events =====
 
-    public struct PatientCreated has copy, drop {
-        patient_id: String,
-        name: String,
+    public struct PatientRecordCreated has copy, drop {
+        record_id: UID,
+        patient_address: address,
+        seal_policy_id: String,
         created_at: u64,
     }
 
-    public struct HealthRecordAdded has copy, drop {
-        record_id: String,
-        patient_id: String,
-        record_type: String,
-        created_by: String,
-        created_at: u64,
+    public struct AccessRequested has copy, drop {
+        record_id: UID,
+        requester: address,
+        reason: String,
+        requested_at: u64,
     }
 
     public struct AccessGranted has copy, drop {
-        patient_id: String,
-        provider_id: String,
+        record_id: UID,
+        patient_address: address,
+        provider_address: address,
+        access_level: u8,
         granted_at: u64,
+    }
+
+    public struct DataAppended has copy, drop {
+        record_id: UID,
+        walrus_blob_id: String,
+        record_type: String,
+        appended_by: address,
+        appended_at: u64,
+    }
+
+    public struct EmergencyAccess has copy, drop {
+        record_id: UID,
+        accessing_doctor: address,
+        master_key_used: bool,
+        accessed_at: u64,
+    }
+
+    public struct AccessRevoked has copy, drop {
+        record_id: UID,
+        provider_address: address,
+        revoked_by: address,
+        revoked_at: u64,
     }
 
     // ===== Functions =====

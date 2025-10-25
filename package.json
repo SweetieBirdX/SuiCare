@@ -17,7 +17,8 @@
     "move:test": "cd health_record_project && sui move test",
     "deploy:testnet": "npm run build && node dist/scripts/deploy-testnet.js",
     "setup:wallet": "bash scripts/setup-wallet.sh",
-    "verify:config": "npm run build && node dist/scripts/verify-config.js"
+    "verify:config": "npm run build && node dist/scripts/verify-config.js",
+    "test:enoki": "npm run build && node dist/scripts/test-enoki.js"
   },
   "keywords": [
     "healthcare",

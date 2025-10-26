@@ -7,8 +7,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { EnokiClient } from '@mysten/enoki';
 import { SuiClient } from '@mysten/sui/client';
+import { getEnokiManager } from '../enoki-integration';
 
 export interface EnokiAuthState {
     user: any | null;
@@ -31,7 +31,6 @@ export interface EnokiAuthHook extends EnokiAuthState {
  * const { user, signIn, suiAddress, isAuthenticated } = useEnokiAuth();
  */
 export function useEnokiAuth(
-    enokiClient: EnokiClient,
     suiClient: SuiClient
 ): EnokiAuthHook {
     const [state, setState] = useState<EnokiAuthState>({
@@ -86,9 +85,9 @@ export function useEnokiAuth(
         try {
             console.log(`🔐 Initiating zkLogin with ${provider}...`);
             
-            // 1. Start zkLogin flow with Enoki
-            // Note: Using mock implementation for development
-            const authUrl = `https://mock-oauth-${provider}.com/auth?client_id=${process.env.ENOKI_CLIENT_ID}&redirect_uri=${window.location.origin}/auth/callback`;
+            // 1. Start zkLogin flow with SuiZkLoginManager
+            const enokiManager = getEnokiManager();
+            const authUrl = await enokiManager.createAuthorizationUrl(provider);
             
             // 2. Redirect to OAuth provider
             window.location.href = authUrl;

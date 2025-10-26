@@ -107,11 +107,16 @@ export class AuditTrailAPI {
     }
 
     /**
-     * Query health record events from Sui blockchain
+     * Query health record events from Sui blockchain with proper filtering
      */
     private async queryHealthRecordEvents(patientAddress: string, limit: number): Promise<any[]> {
         try {
-            // Query different types of events
+            console.log('🔍 Querying on-chain events for audit trail...');
+            console.log(`   Patient: ${patientAddress}`);
+            console.log(`   Package: ${this.packageId}`);
+            console.log(`   Limit: ${limit}`);
+
+            // Query different types of events with proper filtering
             const eventQueries = [
                 // Access request events
                 {
@@ -141,19 +146,25 @@ export class AuditTrailAPI {
 
             const allEvents: any[] = [];
 
-            // Fetch events for each type
+            // Fetch events for each type with proper filtering
             for (const query of eventQueries) {
                 try {
+                    console.log(`   Querying: ${query.MoveEventType}`);
+                    
                     const events = await this.suiClient.queryEvents({
                         query: query,
                         limit: limit,
                         order: 'descending'
                     });
                     
+                    console.log(`   Found ${events.data.length} events`);
+                    
                     // Filter events related to the patient
                     const patientEvents = events.data.filter(event => 
                         this.isEventRelatedToPatient(event, patientAddress)
                     );
+                    
+                    console.log(`   Filtered to ${patientEvents.length} patient-related events`);
                     
                     allEvents.push(...patientEvents);
                 } catch (error) {
@@ -161,25 +172,51 @@ export class AuditTrailAPI {
                 }
             }
 
+            // Sort all events by timestamp (most recent first)
+            allEvents.sort((a, b) => b.timestampMs - a.timestampMs);
+            
+            console.log(`✅ Total events found: ${allEvents.length}`);
             return allEvents;
 
         } catch (error) {
             console.error('Failed to query health record events:', error);
-            // Return mock data for development
-            return this.getMockAuditEvents(patientAddress, limit);
+            throw new Error(`Audit trail query failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
     /**
-     * Check if an event is related to the patient
+     * Check if an event is related to the patient with enhanced filtering
      */
     private isEventRelatedToPatient(event: any, patientAddress: string): boolean {
         try {
             const parsedData = event.parsedJson as any;
-            return parsedData?.patient_address === patientAddress || 
-                   parsedData?.target_address === patientAddress ||
-                   parsedData?.requester_address === patientAddress;
-        } catch {
+            
+            // Check multiple possible address fields
+            const addressFields = [
+                'patient_address',
+                'target_address', 
+                'requester_address',
+                'actor_address',
+                'doctor_address',
+                'pharmacy_address'
+            ];
+            
+            // Check if any address field matches the patient
+            for (const field of addressFields) {
+                if (parsedData?.[field] === patientAddress) {
+                    console.log(`   ✅ Event matches patient via ${field}`);
+                    return true;
+                }
+            }
+            
+            // Check if event is from the correct Move package
+            if (!event.type?.includes(this.packageId)) {
+                return false;
+            }
+            
+            return false;
+        } catch (error) {
+            console.warn('Failed to parse event data:', error);
             return false;
         }
     }
@@ -394,45 +431,4 @@ export class AuditTrailAPI {
         }
     }
 
-    /**
-     * Get mock audit events for development
-     */
-    private getMockAuditEvents(patientAddress: string, limit: number): any[] {
-        const mockEvents = [
-            {
-                id: { eventId: 'event-001', txDigest: 'tx-001' },
-                timestampMs: Date.now() - 3600000,
-                type: `${this.packageId}::health_record::AccessRequested`,
-                parsedJson: {
-                    actor_address: '0xdoctor123...',
-                    target_address: patientAddress,
-                    reason: 'Routine checkup',
-                    access_level: 2
-                }
-            },
-            {
-                id: { eventId: 'event-002', txDigest: 'tx-002' },
-                timestampMs: Date.now() - 1800000,
-                type: `${this.packageId}::health_record::AccessGranted`,
-                parsedJson: {
-                    actor_address: '0xdoctor123...',
-                    target_address: patientAddress,
-                    access_level: 2
-                }
-            },
-            {
-                id: { eventId: 'event-003', txDigest: 'tx-003' },
-                timestampMs: Date.now() - 900000,
-                type: `${this.packageId}::health_record::EmergencyAccess`,
-                parsedJson: {
-                    actor_address: '0xemergency456...',
-                    target_address: patientAddress,
-                    emergency_reason: 'Patient unconscious, critical condition',
-                    master_key_used: true
-                }
-            }
-        ];
-
-        return mockEvents.slice(0, limit);
-    }
 }

@@ -20,8 +20,8 @@ import { AuditTrailDashboard } from './AuditTrailUI';
 // PROMPT 4.1: zkLogin Authentication
 // ==========================================
 
-export function LoginPage({ enokiClient, suiClient }: any) {
-    const { signIn, isLoading, error } = useEnokiAuth(enokiClient, suiClient);
+export function LoginPage({ suiClient }: any) {
+    const { signIn, isLoading, error } = useEnokiAuth(suiClient);
 
     return (
         <div className="login-container">
@@ -69,9 +69,9 @@ export function LoginPage({ enokiClient, suiClient }: any) {
 // PROMPT 4.2: Role-Based Router
 // ==========================================
 
-export function RoleBasedRouter({ enokiClient, suiClient, packageId }: any) {
+export function RoleBasedRouter({ suiClient, packageId }: any) {
     const navigate = useNavigate();
-    const { suiAddress, isAuthenticated, isLoading: authLoading } = useEnokiAuth(enokiClient, suiClient);
+    const { suiAddress, isAuthenticated, isLoading: authLoading } = useEnokiAuth(suiClient);
     const { role, isLoading: roleLoading } = useRoleDetection(suiAddress, suiClient, packageId);
 
     useEffect(() => {
@@ -96,7 +96,7 @@ export function RoleBasedRouter({ enokiClient, suiClient, packageId }: any) {
     }
 
     if (!isAuthenticated) {
-        return <LoginPage enokiClient={enokiClient} suiClient={suiClient} />;
+        return <LoginPage suiClient={suiClient} />;
     }
 
     return null;

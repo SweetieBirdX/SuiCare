@@ -164,23 +164,107 @@ export function useRoleDetection(
      */
     async function checkRoleFromContract(address: string): Promise<UserRole> {
         try {
-            // For testing purposes, simulate role detection
-            // In production, this would call actual Move contract functions
             console.log(`   Checking role from contract for: ${address}`);
             
-            // Simulate role detection based on address patterns
-            if (address.includes('doctor') || address.endsWith('d')) {
+            // Check for DoctorCapability
+            const doctorCapability = await checkDoctorCapability(address);
+            if (doctorCapability) {
+                console.log('   ✅ DoctorCapability found');
                 return 'doctor';
-            } else if (address.includes('pharmacy') || address.endsWith('p')) {
+            }
+            
+            // Check for PharmacyCapability
+            const pharmacyCapability = await checkPharmacyCapability(address);
+            if (pharmacyCapability) {
+                console.log('   ✅ PharmacyCapability found');
                 return 'pharmacy';
-            } else if (address.includes('admin') || address.endsWith('a')) {
-                return 'admin';
-            } else {
+            }
+            
+            // Check for PatientRecord ownership
+            const hasPatientRecord = await checkPatientRecordOwnership(address);
+            if (hasPatientRecord) {
+                console.log('   ✅ PatientRecord found');
                 return 'patient';
             }
+            
+            // Check for MasterKey (admin role)
+            const hasMasterKey = await checkMasterKeyOwnership(address);
+            if (hasMasterKey) {
+                console.log('   ✅ MasterKey found');
+                return 'admin';
+            }
+            
+            console.log('   ⚠️  No capability objects found');
+            return 'unknown';
         } catch (error) {
             console.error('Failed to check role from contract:', error);
             return 'unknown';
+        }
+    }
+
+    /**
+     * Check if user has DoctorCapability
+     */
+    async function checkDoctorCapability(address: string): Promise<boolean> {
+        try {
+            const objects = await suiClient.getOwnedObjects({
+                owner: address,
+                filter: {
+                    StructType: `${packageId}::health_record::DoctorCapability`
+                },
+                options: {
+                    showType: true
+                }
+            });
+
+            return objects.data.length > 0;
+        } catch (error) {
+            console.error('Failed to check DoctorCapability:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if user has PharmacyCapability
+     */
+    async function checkPharmacyCapability(address: string): Promise<boolean> {
+        try {
+            const objects = await suiClient.getOwnedObjects({
+                owner: address,
+                filter: {
+                    StructType: `${packageId}::health_record::PharmacyCapability`
+                },
+                options: {
+                    showType: true
+                }
+            });
+
+            return objects.data.length > 0;
+        } catch (error) {
+            console.error('Failed to check PharmacyCapability:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if user has MasterKey (admin role)
+     */
+    async function checkMasterKeyOwnership(address: string): Promise<boolean> {
+        try {
+            const objects = await suiClient.getOwnedObjects({
+                owner: address,
+                filter: {
+                    StructType: `${packageId}::health_record::MasterKey`
+                },
+                options: {
+                    showType: true
+                }
+            });
+
+            return objects.data.length > 0;
+        } catch (error) {
+            console.error('Failed to check MasterKey ownership:', error);
+            return false;
         }
     }
 
@@ -198,7 +282,7 @@ export function useRoleDetection(
                     showType: true
                 }
             });
-            
+
             return objects.data.length > 0;
         } catch (error) {
             console.error('Failed to check PatientRecord ownership:', error);
@@ -207,7 +291,7 @@ export function useRoleDetection(
     }
 
     /**
-     * Get permissions for the detected role
+     * Get permissions for the detected role with authorization limits
      */
     async function getPermissionsForRole(address: string, role: UserRole): Promise<any> {
         if (role === 'patient') {
@@ -217,23 +301,46 @@ export function useRoleDetection(
                 canGrantAccess: true,
                 canRevokeAccess: true,
                 canViewAuditLog: true,
-                canModifyRecords: false
+                canModifyRecords: false,
+                canSelfAccess: false, // Prevent self-access
+                canModifyOwnData: false // Prevent modifying own data
             };
         } else if (role === 'doctor') {
-            // Get doctor's access permissions
+            // Get doctor's access permissions with restrictions
             const grantedRecords = await getGrantedRecordsForDoctor(address);
+            const hasPatientRecord = await checkPatientRecordOwnership(address);
+            
             return {
                 canViewRecords: true,
                 canAppendRecords: true,
                 canRequestAccess: true,
                 grantedRecords: grantedRecords,
-                canModifyRecords: false
+                canModifyRecords: false,
+                canSelfAccess: false, // Prevent self-access even if doctor
+                canModifyOwnData: false, // Prevent modifying own data even if doctor
+                hasPatientRecord: hasPatientRecord, // Track if doctor is also a patient
+                restrictions: {
+                    cannotGrantSelfAccess: true,
+                    cannotModifyOwnPatientData: true,
+                    mustHaveSeparatePatientRecord: hasPatientRecord
+                }
             };
         } else if (role === 'pharmacy') {
             return {
                 canViewPrescriptions: true,
                 canDispenseMedication: true,
-                canModifyRecords: false
+                canModifyRecords: false,
+                canSelfAccess: false,
+                canModifyOwnData: false
+            };
+        } else if (role === 'admin') {
+            return {
+                canViewAllRecords: true,
+                canEmergencyAccess: true,
+                canRevokeAllAccess: true,
+                canModifyRecords: false,
+                canSelfAccess: false,
+                canModifyOwnData: false
             };
         }
         
@@ -271,19 +378,4 @@ export function useRoleDetection(
     return result;
 }
 
-/**
- * Mock hook for development/testing
- */
-export function useMockRoleDetection(mockRole: UserRole = 'patient'): RoleDetectionResult {
-    return {
-        role: mockRole,
-        isLoading: false,
-        error: null,
-        capabilities: [mockRole === 'doctor' ? 'DoctorCapability' : 'PatientCapability'],
-        permissions: {
-            canViewOwnRecords: true,
-            canGrantAccess: mockRole === 'patient',
-            canAppendRecords: mockRole === 'doctor'
-        }
-    };
-}
+

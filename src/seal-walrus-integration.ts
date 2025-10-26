@@ -381,9 +381,21 @@ export class SealWalrusIntegration {
     }
 
     private async readBlobData(blob: any): Promise<Uint8Array> {
-        // In production, this would use the proper Walrus Blob API
-        // For now, simulate reading blob data
-        return new Uint8Array([0x01, 0x02, 0x03, 0x04]);
+        try {
+            console.log('📥 Reading blob data from Walrus...');
+            console.log(`   Blob ID: ${blob.blobId}`);
+            
+            // Use Walrus client to read the actual blob data
+            const blobData = await this.walrusClient.readBlob({
+                blobId: blob.blobId
+            });
+            
+            console.log(`   ✅ Blob data read: ${blobData.length} bytes`);
+            return blobData;
+        } catch (error) {
+            console.error('❌ Failed to read blob data:', error);
+            throw new Error(`Walrus blob read failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     }
 
     private async createSessionKey(keypair: Ed25519Keypair, packageId: string): Promise<any> {

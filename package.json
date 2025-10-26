@@ -18,7 +18,10 @@
     "deploy:testnet": "npm run build && node dist/scripts/deploy-testnet.js",
     "setup:wallet": "bash scripts/setup-wallet.sh",
     "verify:config": "npm run build && node dist/scripts/verify-config.js",
-    "test:enoki": "npm run build && node dist/scripts/test-enoki.js"
+    "test:enoki": "npm run build && node dist/scripts/test-enoki.js",
+    "frontend:dev": "vite",
+    "frontend:build": "vite build",
+    "frontend:preview": "vite preview"
   },
   "keywords": [
     "healthcare",
@@ -43,8 +46,10 @@
     "@types/node": "^24.9.1",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
     "dotenv": "^16.6.1",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
   }
 }

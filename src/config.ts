@@ -24,6 +24,7 @@ export interface SuiCareConfig {
   enoki: {
     apiKey: string;
     clientId: string;
+    clientSecret: string;
     provider: 'google' | 'facebook' | 'twitch' | 'microsoft';
   };
   
@@ -78,6 +79,7 @@ export const defaultConfig: SuiCareConfig = {
   enoki: {
     apiKey: getEnvVar('ENOKI_API_KEY', ''),
     clientId: getEnvVar('VITE_ENOKI_CLIENT_ID', 'enoki_public_0e8f38059b082ce8258648da45c14ede'),
+    clientSecret: getEnvVar('VITE_ENOKI_CLIENT_SECRET', ''),
     provider: 'google',
   },
   seal: {

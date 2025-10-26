@@ -1,5 +1,4 @@
 import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-import { EnokiClient } from '@mysten/enoki';
 import { SealClient } from '@mysten/seal';
 import { WalrusClient } from '@mysten/walrus';
 
@@ -13,19 +12,14 @@ import { WalrusClient } from '@mysten/walrus';
 
 class SuiCare {
   private suiClient: SuiClient;
-  private enokiClient: EnokiClient;
   private sealClient: SealClient;
   private walrusClient: WalrusClient;
 
   constructor(config: {
     suiRpcUrl: string;
-    enokiApiKey: string;
   }) {
     // Initialize Sui client for blockchain interaction
     this.suiClient = new SuiClient({ url: config.suiRpcUrl });
-    
-    // Initialize Enoki client for zkLogin passwordless authentication
-    this.enokiClient = new EnokiClient({ apiKey: config.enokiApiKey });
     
     // Initialize Seal client for identity-based encryption
     // SealClient requires serverConfigs parameter with key server configurations
@@ -50,12 +44,6 @@ class SuiCare {
     return this.suiClient;
   }
 
-  /**
-   * Get the Enoki client instance for passwordless authentication
-   */
-  getEnokiClient(): EnokiClient {
-    return this.enokiClient;
-  }
 
   /**
    * Get the Seal client instance for identity-based encryption

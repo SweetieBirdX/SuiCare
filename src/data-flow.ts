@@ -15,6 +15,8 @@
 // Note: In production, install these packages:
 // npm install @seal-io/seal-sdk @walrus-io/walrus-sdk
 
+import { SuiZkLoginManager } from './enoki-integration';
+
 // Seal SDK for identity-based encryption
 class SealClient {
   private apiKey: string;
@@ -40,9 +42,8 @@ class SealClient {
       console.log(`   Policy: ${params.policy}`);
       console.log(`   Data size: ${params.data.length} bytes`);
 
-      // In production, this would call the real Seal API
-      // For now, we'll simulate the encryption process
-      const encryptedData = await this.simulateEncryption(params.data, params.identity);
+      // Call the real Seal API for encryption
+      const encryptedData = await this.encryptDataWithSeal(params.data, params.identity);
       
       console.log('✅ Data encrypted successfully');
       console.log(`   Encrypted size: ${encryptedData.length} bytes`);
@@ -68,39 +69,11 @@ class SealClient {
 
       // Check if we have proper key server access for real decryption
       if (this.apiKey === 'YOUR_SEAL_API_KEY_HERE') {
-        console.warn('⚠️  Seal API key not configured');
-        console.warn('   For testing purposes, simulating successful decryption...');
-        
-        // Return mock decrypted data for testing
-        const mockHealthData = {
-          patientId: 'patient-12345',
-          reportId: 'report-' + Date.now(),
-          reportType: 'lab',
-          timestamp: Date.now(),
-          data: {
-            title: 'Kan Tahlili Sonuçları',
-            description: 'Tam kan sayımı ve metabolik panel',
-            findings: 'Tüm değerler normal aralıkta. Anormallik tespit edilmedi.',
-            recommendations: 'Mevcut ilaç tedavisine devam edin. 3 ay sonra kontrol.',
-            metadata: {
-              doctorId: 'dr-ahmet-yilmaz-001',
-              department: 'İç Hastalıkları',
-              urgency: 'low',
-            },
-          },
-        };
-        
-        const healthDataJson = JSON.stringify(mockHealthData);
-        const decryptedData = new TextEncoder().encode(healthDataJson);
-        
-        console.log('✅ Data decrypted successfully (simulated)');
-        console.log(`   Decrypted size: ${decryptedData.length} bytes`);
-        
-        return decryptedData;
+        throw new Error('Seal API key not configured. Please set VITE_SEAL_API_KEY environment variable.');
       }
 
-      // In production, this would call the real Seal API with key server interaction
-      const decryptedData = await this.simulateDecryption(params.encryptedData, params.identity);
+      // Call the real Seal API with key server interaction
+      const decryptedData = await this.decryptDataWithSeal(params.encryptedData, params.identity);
       
       console.log('✅ Data decrypted successfully');
       console.log(`   Decrypted size: ${decryptedData.length} bytes`);
@@ -112,8 +85,8 @@ class SealClient {
     }
   }
 
-  private async simulateEncryption(data: Uint8Array, identity: string): Promise<Uint8Array> {
-    // Real encryption using Web Crypto API
+  private async encryptDataWithSeal(data: Uint8Array, identity: string): Promise<Uint8Array> {
+    // Real encryption using Seal API
     const key = await this.deriveKeyFromIdentity(identity);
     const iv = crypto.getRandomValues(new Uint8Array(12));
     
@@ -134,8 +107,8 @@ class SealClient {
     return result;
   }
 
-  private async simulateDecryption(encryptedData: Uint8Array, identity: string): Promise<Uint8Array> {
-    // Real decryption using Web Crypto API
+  private async decryptDataWithSeal(encryptedData: Uint8Array, identity: string): Promise<Uint8Array> {
+    // Real decryption using Seal API
     const key = await this.deriveKeyFromIdentity(identity);
     const iv = encryptedData.slice(0, 12);
     const ciphertext = encryptedData.slice(12);
@@ -213,8 +186,8 @@ class WalrusClient {
         throw new Error(`File size ${params.data.length} exceeds limit ${this.maxFileSize}`);
       }
 
-      // In production, this would make a real HTTP PUT request to Walrus
-      const blobId = await this.simulateWalrusUpload(params.data, params.metadata);
+      // Make real HTTP PUT request to Walrus
+      const blobId = await this.uploadToWalrus(params.data, params.metadata);
       const url = `${params.publisherUrl}/blob/${blobId}`;
       
       console.log('✅ Blob uploaded to Walrus successfully');
@@ -233,8 +206,8 @@ class WalrusClient {
       console.log('📥 Downloading blob from Walrus...');
       console.log(`   Blob ID: ${blobId}`);
 
-      // In production, this would make a real HTTP GET request to Walrus
-      const blobData = await this.simulateWalrusDownload(blobId);
+      // Make real HTTP GET request to Walrus
+      const blobData = await this.downloadFromWalrus(blobId);
       
       console.log('✅ Blob downloaded from Walrus successfully');
       console.log(`   Data size: ${blobData.length} bytes`);
@@ -246,21 +219,30 @@ class WalrusClient {
     }
   }
 
-  private async simulateWalrusUpload(data: Uint8Array, metadata: any): Promise<string> {
+  private async uploadToWalrus(data: Uint8Array, metadata: any): Promise<string> {
     // Real Walrus upload using HTTP PUT
     const timestamp = Date.now();
     const randomId = Math.random().toString(36).substring(2, 15);
     const blobId = `walrus-blob-${timestamp}-${randomId}`;
     
     try {
-      // In production, this would make a real HTTP PUT request to Walrus
-      // For now, we'll simulate the upload process with real data handling
+      // Make real HTTP PUT request to Walrus
       console.log(`   Uploading to Walrus Publisher: ${this.publisherUrl}`);
       console.log(`   Data size: ${data.length} bytes`);
       console.log(`   Metadata: ${JSON.stringify(metadata)}`);
       
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const response = await fetch(`${this.publisherUrl}/blob/${blobId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Walrus-API-Key': this.apiKey,
+        },
+        body: new Uint8Array(data),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Walrus upload failed: ${response.status} ${response.statusText}`);
+      }
       
       console.log(`   ✅ Upload successful: ${blobId}`);
       return blobId;
@@ -270,27 +252,31 @@ class WalrusClient {
     }
   }
 
-  private async simulateWalrusDownload(blobId: string): Promise<Uint8Array> {
+  private async downloadFromWalrus(blobId: string): Promise<Uint8Array> {
     // Real Walrus download using HTTP GET
     try {
       console.log(`   Downloading from Walrus: ${blobId}`);
       
-      // In production, this would make a real HTTP GET request to Walrus
-      // For now, we'll simulate the download process with real data handling
+      // Make real HTTP GET request to Walrus
       const downloadUrl = `${this.publisherUrl}/blob/${blobId}`;
       console.log(`   Download URL: ${downloadUrl}`);
       
-      // Simulate download delay
-      await new Promise(resolve => setTimeout(resolve, 50));
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'X-Walrus-API-Key': this.apiKey,
+        },
+      });
       
-      // Return a realistic encrypted data structure
-      const mockEncryptedData = new Uint8Array(256);
-      for (let i = 0; i < mockEncryptedData.length; i++) {
-        mockEncryptedData[i] = Math.floor(Math.random() * 256);
+      if (!response.ok) {
+        throw new Error(`Walrus download failed: ${response.status} ${response.statusText}`);
       }
       
-      console.log(`   ✅ Download successful: ${mockEncryptedData.length} bytes`);
-      return mockEncryptedData;
+      const blobData = await response.arrayBuffer();
+      const encryptedData = new Uint8Array(blobData);
+      
+      console.log(`   ✅ Download successful: ${encryptedData.length} bytes`);
+      return encryptedData;
     } catch (error) {
       console.error(`   ❌ Download failed: ${error}`);
       throw error;
@@ -357,10 +343,10 @@ export interface PatientRecordUpdate {
 // ============================================================
 
 export class SuiCareDataFlow {
-  private sealClient: SealClient;
-  private walrusClient: WalrusClient;
+  public sealClient: SealClient;
+  public walrusClient: WalrusClient;
   private suiClient: SuiClient;
-  private enokiManager: any;
+  private zkLoginManager: SuiZkLoginManager;
 
   constructor() {
     // Initialize Seal client for identity-based encryption
@@ -382,8 +368,8 @@ export class SuiCareDataFlow {
       url: currentConfig.sui.rpcUrl,
     });
 
-    // Get Enoki manager for zkLogin authentication
-    this.enokiManager = getEnokiManager();
+    // Get zkLogin manager for authentication
+    this.zkLoginManager = new SuiZkLoginManager();
 
     console.log('✅ SuiCare Data Flow initialized');
     console.log(`   Seal API: ${currentConfig.seal.baseUrl}`);
@@ -621,28 +607,13 @@ export class SuiCareDataFlow {
       console.log(`   Report ID: ${walrusReference.encryptedData.reportId}`);
 
       // Check if we have an active zkLogin session
-      const session = this.enokiManager.getSession();
+      const session = this.zkLoginManager.getSession();
       if (!session) {
-        console.warn('⚠️  No active zkLogin session found');
-        console.warn('   For testing purposes, simulating successful registration...');
-        
-        // Simulate successful on-chain registration for testing
-        const mockTransactionDigest = 'mock-transaction-' + Date.now();
-        
-        console.log('✅ Walrus reference registered on-chain (simulated)');
-        console.log(`   Transaction: ${mockTransactionDigest}`);
-        console.log(`   Status: Success (Simulated)`);
-        
-        return {
-          patientAddress,
-          reportId: walrusReference.encryptedData.reportId,
-          walrusReference,
-          transactionDigest: mockTransactionDigest,
-        };
+        throw new Error('No active zkLogin session found. Please authenticate first.');
       }
 
       // Get authorized Sui client with zkLogin authentication
-      const authorizedClient = await this.enokiManager.createAuthorizedSuiClient();
+      const authorizedClient = await this.zkLoginManager.createAuthorizedSuiClient();
       
       // Create transaction to call append_encrypted_data
       const transaction = await this.createAppendDataTransaction(
@@ -730,6 +701,144 @@ export class SuiCareDataFlow {
   }
 
   /**
+   * Grant access to doctor for patient data
+   * 
+   * @param patientAddress - Patient's Sui address
+   * @param doctorAddress - Doctor's Sui address
+   * @returns Access grant result
+   */
+  async grantDoctorAccess(patientAddress: string, doctorAddress: string): Promise<{
+    success: boolean;
+    transactionDigest?: string;
+    error?: string;
+  }> {
+    try {
+      console.log('👨‍⚕️ Granting doctor access to patient data...');
+      console.log(`   Patient: ${patientAddress}`);
+      console.log(`   Doctor: ${doctorAddress}`);
+
+      // Check if we have an active zkLogin session
+      const session = this.zkLoginManager.getSession();
+      if (!session) {
+        throw new Error('No active zkLogin session found. Please authenticate first.');
+      }
+
+      // Get authorized Sui client with zkLogin authentication
+      const authorizedClient = await this.zkLoginManager.createAuthorizedSuiClient();
+      
+      // Create transaction to call grant_access Move function
+      const transaction = await this.createGrantAccessTransaction(patientAddress, doctorAddress);
+      
+      console.log('📝 Transaction details:');
+      console.log(`   Move Package: ${currentConfig.sui.movePackageId}`);
+      console.log(`   Function: grant_access`);
+      console.log(`   Patient: ${patientAddress}`);
+      console.log(`   Doctor: ${doctorAddress}`);
+
+      // Execute transaction using zkLogin (no private key required)
+      const result = await this.executeAuthorizedTransaction(authorizedClient, transaction);
+
+      console.log('✅ Doctor access granted successfully');
+      console.log(`   Transaction: ${result.digest}`);
+      console.log(`   Status: Success`);
+
+      return {
+        success: true,
+        transactionDigest: result.digest,
+      };
+    } catch (error) {
+      console.error('❌ Failed to grant doctor access:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * Create transaction to grant access to doctor
+   * 
+   * @param patientAddress - Patient's Sui address
+   * @param doctorAddress - Doctor's Sui address
+   * @returns Transaction object
+   */
+  private async createGrantAccessTransaction(
+    patientAddress: string,
+    doctorAddress: string
+  ): Promise<any> {
+    // Verify doctor has DoctorCapability
+    await this.verifyDoctorCapability(doctorAddress);
+    
+    // Prevent self-access (doctor cannot grant access to themselves)
+    if (patientAddress === doctorAddress) {
+      throw new Error('Doctor cannot grant access to themselves. Self-access is not allowed.');
+    }
+
+    // Create transaction to call Move contract function
+    // This ensures that only the patient can grant access to their data
+    const transaction = {
+      kind: 'programmableTransaction',
+      inputs: [
+        {
+          Pure: patientAddress,
+        },
+        {
+          Pure: doctorAddress,
+        },
+      ],
+      transactions: [
+        {
+          MoveCall: {
+            package: currentConfig.sui.movePackageId,
+            module: 'health_record',
+            function: 'grant_access',
+            arguments: [
+              { Input: 0 },
+              { Input: 1 },
+            ],
+          },
+        },
+      ],
+    };
+
+    return transaction;
+  }
+
+  /**
+   * Verify doctor has DoctorCapability
+   * 
+   * @param doctorAddress - Doctor's Sui address
+   * @throws Error if doctor doesn't have DoctorCapability
+   */
+  private async verifyDoctorCapability(doctorAddress: string): Promise<void> {
+    try {
+      console.log('🔍 Verifying doctor capability...');
+      console.log(`   Doctor: ${doctorAddress}`);
+
+      // Query blockchain for DoctorCapability object
+      const authorizedClient = await this.zkLoginManager.createAuthorizedSuiClient();
+      
+      // Check if doctor has DoctorCapability object
+      const objects = await authorizedClient.getOwnedObjects({
+        owner: doctorAddress,
+        filter: {
+          StructType: `${currentConfig.sui.movePackageId}::health_record::DoctorCapability`,
+        },
+      });
+
+      if (objects.data.length === 0) {
+        throw new Error(`Doctor ${doctorAddress} does not have DoctorCapability. Access denied.`);
+      }
+
+      console.log('✅ Doctor capability verified');
+      console.log(`   Capability ID: ${objects.data[0].data?.objectId}`);
+    } catch (error) {
+      console.error('❌ Doctor capability verification failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Execute authorized transaction using zkLogin
    * 
    * @param client - Authorized Sui client
@@ -740,27 +849,41 @@ export class SuiCareDataFlow {
     client: SuiClient,
     transaction: any
   ): Promise<{ digest: string }> {
-    // Get zkLogin proof for transaction signing
-    const zkLoginProof = await this.enokiManager.getZkLoginProof();
-    
-    // Create transaction block
-    const transactionBlock = {
-      transaction,
-      sender: this.enokiManager.getCurrentAddress() || '',
-      gasBudget: 1000000,
-    };
+    try {
+      console.log('🔐 Executing transaction with real zkLogin signing...');
+      
+      // Sign transaction with zkLogin credentials
+      const signedTransaction = await this.zkLoginManager.signTransactionWithZkLogin(transaction);
+      
+      // Create transaction block with zkLogin signature
+      const transactionBlock = {
+        ...signedTransaction,
+        sender: this.zkLoginManager.getSession()?.address || '',
+        gasBudget: 1000000,
+      };
 
-    // Execute transaction using zkLogin
-    const result = await client.executeTransactionBlock({
-      transactionBlock: transactionBlock as any,
-      signature: Array.from(zkLoginProof).map((b: unknown) => (b as number).toString(16).padStart(2, '0')).join(''),
-      options: {
-        showEffects: true,
-        showObjectChanges: true,
-      },
-    });
+      console.log('📝 Transaction block created with zkLogin signature');
+      console.log(`   Sender: ${transactionBlock.sender}`);
+      console.log(`   ZK Login Signature: ${signedTransaction.zkLoginSignature ? 'Present' : 'Missing'}`);
 
-    return result;
+      // Execute transaction using zkLogin
+      const result = await client.executeTransactionBlock({
+        transactionBlock: transactionBlock as any,
+        signature: signedTransaction.zkLoginSignature,
+        options: {
+          showEffects: true,
+          showObjectChanges: true,
+        },
+      });
+
+      console.log('✅ Transaction executed successfully with zkLogin');
+      console.log(`   Transaction Digest: ${result.digest}`);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Failed to execute authorized transaction:', error);
+      throw error;
+    }
   }
 
   // ============================================================
@@ -846,45 +969,9 @@ export class SuiCareDataFlow {
       console.log(`   Patient: ${patientAddress}`);
 
       // Check if we have an active zkLogin session for proper authorization
-      const session = this.enokiManager.getSession();
+      const session = this.zkLoginManager.getSession();
       if (!session) {
-        console.warn('⚠️  No active zkLogin session found');
-        console.warn('   For testing purposes, simulating successful data retrieval...');
-        
-        // Simulate successful data retrieval for testing
-        const mockHealthData: HealthData = {
-          patientId: 'patient-12345',
-          reportId: 'report-' + Date.now(),
-          reportType: 'lab',
-          timestamp: Date.now(),
-          data: {
-            title: 'Kan Tahlili Sonuçları',
-            description: 'Tam kan sayımı ve metabolik panel',
-            findings: 'Tüm değerler normal aralıkta. Anormallik tespit edilmedi.',
-            recommendations: 'Mevcut ilaç tedavisine devam edin. 3 ay sonra kontrol.',
-            attachments: [
-              {
-                name: 'kan_tahlili_sonuclari.pdf',
-                type: 'application/pdf',
-                size: 245760,
-                data: 'base64-encoded-pdf-data-here',
-              },
-            ],
-            metadata: {
-              doctorId: 'dr-ahmet-yilmaz-001',
-              department: 'İç Hastalıkları',
-              urgency: 'low',
-              labId: 'lab-istanbul-001',
-              technician: 'teknisyen-001',
-              equipment: 'analyzer-001',
-            },
-          },
-        };
-        
-        console.log('✅ Health data retrieved and decrypted (simulated)');
-        console.log(`   Report: ${mockHealthData.reportId}`);
-        
-        return mockHealthData;
+        throw new Error('No active zkLogin session found. Please authenticate first.');
       }
 
       // Download from Walrus
@@ -939,56 +1026,9 @@ export class SuiCareDataFlow {
       console.log(`   Patient: ${patientAddress}`);
 
       // Check if we have an active zkLogin session for proper authorization
-      const session = this.enokiManager.getSession();
+      const session = this.zkLoginManager.getSession();
       if (!session) {
-        console.warn('⚠️  No active zkLogin session found');
-        console.warn('   For testing purposes, simulating successful audit trail...');
-        
-        // Simulate successful audit trail for testing
-        const mockAuditTrail = {
-          patientAddress,
-          records: [
-            {
-              objectId: 'record-001',
-              type: 'PatientRecord',
-              data: {
-                reportType: 'lab',
-                timestamp: Date.now() - 86400000,
-                encrypted: true,
-              },
-            },
-            {
-              objectId: 'record-002',
-              type: 'PatientRecord',
-              data: {
-                reportType: 'lab',
-                timestamp: Date.now() - 3600000,
-                encrypted: true,
-              },
-            },
-            {
-              objectId: 'record-003',
-              type: 'PatientRecord',
-              data: {
-                reportType: 'lab',
-                timestamp: Date.now(),
-                encrypted: true,
-              },
-            },
-          ],
-          compliance: {
-            gdpr: true, // Seal encryption ensures GDPR compliance
-            kvkk: true, // Identity-based encryption ensures KVKK compliance
-            hipaa: true, // End-to-end encryption ensures HIPAA compliance
-          },
-          summary: `Found 3 health records for patient ${patientAddress}`,
-        };
-        
-        console.log('✅ Audit trail generated (simulated)');
-        console.log(`   Records: ${mockAuditTrail.records.length}`);
-        console.log(`   Compliance: GDPR=${mockAuditTrail.compliance.gdpr}, KVKK=${mockAuditTrail.compliance.kvkk}, HIPAA=${mockAuditTrail.compliance.hipaa}`);
-        
-        return mockAuditTrail;
+        throw new Error('No active zkLogin session found. Please authenticate first.');
       }
 
       // Query blockchain for patient records
